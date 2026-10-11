@@ -1,5 +1,5 @@
 // sw.js - Service Worker for Inkwasher Offline Drawing & PWA Cache
-const CACHE_NAME = 'inkwasher-v2';
+const CACHE_NAME = 'inkwasher-v3';
 const APP_SHELL = [
   './',
   './index.html',
@@ -19,10 +19,9 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', event => {
+  self.skipWaiting();
   event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(APP_SHELL))
-      .then(() => self.skipWaiting())
+    caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL))
   );
 });
 
@@ -34,11 +33,22 @@ self.addEventListener('activate', event => {
   );
 });
 
+// Network-First strategy: always fetch fresh from network when online; fall back to cache when offline
 self.addEventListener('fetch', event => {
   if (event.request.method !== 'GET') return;
+
   event.respondWith(
-    caches.match(event.request)
-      .then(cached => cached || fetch(event.request))
-      .catch(() => caches.match('./index.html'))
+    fetch(event.request)
+      .then(response => {
+        if (response && response.status === 200) {
+          const clone = response.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+        }
+        return response;
+      })
+      .catch(() => {
+        return caches.match(event.request)
+          .then(cached => cached || caches.match('./index.html'));
+      })
   );
 });

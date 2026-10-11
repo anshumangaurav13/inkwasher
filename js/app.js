@@ -100,14 +100,6 @@ export class InkwasherApp {
         return;
       }
 
-      // Check for Spring-Loaded navigation mode (Space = Pan, Ctrl+Space = Zoom, R = Rotate)
-      const springMode = this.viewport.getActiveSpringMode();
-      if (springMode) {
-        e.preventDefault();
-        this.viewport.startNavDrag(e.clientX, e.clientY, springMode);
-        return;
-      }
-
       // Handle touch input (Fingers are strictly for viewport navigation: pan/zoom/rotate)
       if (e.pointerType === 'touch') {
         e.preventDefault();
