@@ -8,7 +8,7 @@
 
 **Inkwasher** is a web-based natural medium watercolor painting studio built on a real-time WebGL2 Navier-Stokes fluid simulation. Ink flows, bleeds, and blooms dynamically only where the paper is wet, gradually drying and settling into the paper fibers.
 
-Designed from the ground up for **Android tablets (S-Pen)**, **iPads (Apple Pencil)**, and **desktop drawing tablets**.
+Inspired by and derived from [John Whitaker's inkwash](https://github.com/johnowhitaker/inkwash).
 
 ---
 
