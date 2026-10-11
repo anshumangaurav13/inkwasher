@@ -202,6 +202,8 @@ export class UIController {
         const val = parseFloat(el.value);
         this.sim.P[key] = val;
         if (valEl) valEl.textContent = format(val);
+        this.sim.wake(60);
+        this.app.renderSingle();
       });
     });
   }

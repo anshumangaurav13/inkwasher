@@ -3,7 +3,7 @@
 import {
   copyFS, splatFS, advectVelFS, advectWetFS, advectInkFS,
   divergenceFS, pressureFS, gradSubFS, curlFS, vorticityFS,
-  exchangeFS, displayFS
+  exchangeFS, displayFS, paperBakeFS
 } from './shaders.js';
 
 export class FluidSimulation {
@@ -22,12 +22,17 @@ export class FluidSimulation {
     };
 
     this.SIM_BASE = 256;
-    this.PRESSURE_ITER = 22;
+    this.PRESSURE_ITER = 16; // Optimized Jacobi iterations (27% fewer draw calls)
     this.fixTimer = 0;
     this.brushFootprint = { x: 0, y: 0, r: 0 };
+    this.activeFrames = 120; // Adaptive sleep counter
 
     this.initPrograms();
     this.initTargets();
+  }
+
+  wake(frames = 120) {
+    this.activeFrames = Math.max(this.activeFrames, frames);
   }
 
   getRes(base) {
@@ -38,6 +43,7 @@ export class FluidSimulation {
   }
 
   initPrograms() {
+    const gl = this.gl;
     this.progCopy = this.glCtx.createProgram(copyFS);
     this.progSplat = this.glCtx.createProgram(splatFS);
     this.progAdvVel = this.glCtx.createProgram(advectVelFS);
@@ -50,6 +56,60 @@ export class FluidSimulation {
     this.progCurl = this.glCtx.createProgram(curlFS);
     this.progVort = this.glCtx.createProgram(vorticityFS);
     this.progDisplay = this.glCtx.createProgram(displayFS);
+    this.progPaperBake = this.glCtx.createProgram(paperBakeFS);
+
+    // Static sampler bindings assigned once to eliminate per-frame driver overhead
+    this.progCopy.bind();
+    gl.uniform1i(this.progCopy.u.uTex, 0);
+
+    this.progAdvVel.bind();
+    gl.uniform1i(this.progAdvVel.u.uVelocity, 0);
+    gl.uniform1i(this.progAdvVel.u.uWet, 1);
+
+    this.progCurl.bind();
+    gl.uniform1i(this.progCurl.u.uVelocity, 0);
+
+    this.progVort.bind();
+    gl.uniform1i(this.progVort.u.uVelocity, 0);
+    gl.uniform1i(this.progVort.u.uCurl, 1);
+
+    this.progDiv.bind();
+    gl.uniform1i(this.progDiv.u.uVelocity, 0);
+
+    this.progPressure.bind();
+    gl.uniform1i(this.progPressure.u.uPressure, 0);
+    gl.uniform1i(this.progPressure.u.uDivergence, 1);
+
+    this.progGradSub.bind();
+    gl.uniform1i(this.progGradSub.u.uPressure, 0);
+    gl.uniform1i(this.progGradSub.u.uVelocity, 1);
+
+    this.progAdvWet.bind();
+    gl.uniform1i(this.progAdvWet.u.uVelocity, 0);
+    gl.uniform1i(this.progAdvWet.u.uWet, 1);
+
+    this.progAdvInk.bind();
+    gl.uniform1i(this.progAdvInk.u.uVelocity, 0);
+    gl.uniform1i(this.progAdvInk.u.uSource, 1);
+    gl.uniform1i(this.progAdvInk.u.uWet, 2);
+
+    this.progExch.bind();
+    gl.uniform1i(this.progExch.u.uFixed, 0);
+    gl.uniform1i(this.progExch.u.uInk, 1);
+    gl.uniform1i(this.progExch.u.uWet, 2);
+
+    this.progDisplay.bind();
+    gl.uniform1i(this.progDisplay.u.uInk, 0);
+    gl.uniform1i(this.progDisplay.u.uWet, 1);
+    gl.uniform1i(this.progDisplay.u.uFixed, 2);
+    gl.uniform1i(this.progDisplay.u.uPaperTex, 3);
+  }
+
+  bakePaperTexture() {
+    const gl = this.gl;
+    this.progPaperBake.bind();
+    gl.uniform2f(this.progPaperBake.u.uRes, this.dyeRes.w, this.dyeRes.h);
+    this.glCtx.blit(this.paperTex);
   }
 
   initTargets() {
@@ -69,6 +129,8 @@ export class FluidSimulation {
     this.ink        = this.glCtx.createDoubleFBO(dye.w, dye.h, gl.RGBA16F, gl.RGBA, HF, gl.LINEAR);
     this.fixed      = this.glCtx.createDoubleFBO(dye.w, dye.h, gl.RGBA16F, gl.RGBA, HF, gl.LINEAR);
     this.wet        = this.glCtx.createDoubleFBO(dye.w, dye.h, gl.R16F, gl.RED, HF, gl.LINEAR);
+    this.paperTex   = this.glCtx.createFBO(dye.w, dye.h, gl.RGBA8, gl.RGBA, gl.UNSIGNED_BYTE, gl.LINEAR);
+    this.bakePaperTexture();
   }
 
   reinitTargets(w, h) {
@@ -77,6 +139,7 @@ export class FluidSimulation {
     }
     if (this.divergence && typeof this.divergence.destroy === 'function') this.divergence.destroy();
     if (this.curl && typeof this.curl.destroy === 'function') this.curl.destroy();
+    if (this.paperTex && typeof this.paperTex.destroy === 'function') this.paperTex.destroy();
 
     this.glCtx.setSize(w, h);
     this.initTargets();
@@ -89,6 +152,8 @@ export class FluidSimulation {
     const oldWet = this.wet.read.tex;
     const oldVel = this.velocity.read.tex;
 
+    if (this.paperTex && typeof this.paperTex.destroy === 'function') this.paperTex.destroy();
+
     this.glCtx.fitCanvas();
     this.initTargets();
 
@@ -99,6 +164,7 @@ export class FluidSimulation {
   }
 
   clearAll() {
+    this.wake(30);
     const gl = this.gl;
     for (const d of [this.velocity, this.pressure, this.ink, this.fixed, this.wet]) {
       for (const f of [d.read, d.write]) {
@@ -111,9 +177,11 @@ export class FluidSimulation {
 
   fixDrawing() {
     this.fixTimer = 1.2;
+    this.wake(180);
   }
 
   splat(target, x, y, r, c, useMax = false) {
+    this.wake(140);
     const gl = this.gl;
     const f = target.read;
     gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo);
@@ -153,10 +221,16 @@ export class FluidSimulation {
       this.fixTimer -= dt;
     }
 
+    // Adaptive Sleep: if fluid has settled and dried, skip heavy simulation passes
+    if (this.activeFrames <= 0 && !fixing) {
+      return false;
+    }
+    this.activeFrames--;
+
     // 1. Velocity Advection & Dissipation
     this.progAdvVel.bind();
-    gl.uniform1i(this.progAdvVel.u.uVelocity, this.velocity.read.attach(0));
-    gl.uniform1i(this.progAdvVel.u.uWet, this.wet.read.attach(1));
+    this.velocity.read.attach(0);
+    this.wet.read.attach(1);
     gl.uniform2f(this.progAdvVel.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     gl.uniform1f(this.progAdvVel.u.uDt, dt);
     gl.uniform1f(this.progAdvVel.u.uDissipation,
@@ -166,13 +240,13 @@ export class FluidSimulation {
 
     // 2. Vorticity Confinement
     this.progCurl.bind();
-    gl.uniform1i(this.progCurl.u.uVelocity, this.velocity.read.attach(0));
+    this.velocity.read.attach(0);
     gl.uniform2f(this.progCurl.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     this.glCtx.blit(this.curl);
 
     this.progVort.bind();
-    gl.uniform1i(this.progVort.u.uVelocity, this.velocity.read.attach(0));
-    gl.uniform1i(this.progVort.u.uCurl, this.curl.attach(1));
+    this.velocity.read.attach(0);
+    this.curl.attach(1);
     gl.uniform2f(this.progVort.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     gl.uniform1f(this.progVort.u.uCurlAmt, 4 + this.P.FLOW * 22);
     gl.uniform1f(this.progVort.u.uDt, dt);
@@ -181,30 +255,30 @@ export class FluidSimulation {
 
     // 3. Divergence
     this.progDiv.bind();
-    gl.uniform1i(this.progDiv.u.uVelocity, this.velocity.read.attach(0));
+    this.velocity.read.attach(0);
     gl.uniform2f(this.progDiv.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     this.glCtx.blit(this.divergence);
 
-    // 4. Pressure Solver (Jacobi relaxation)
+    // 4. Pressure Solver (Jacobi relaxation with optimized iteration count)
     this.progCopy.bind();
-    gl.uniform1i(this.progCopy.u.uTex, this.pressure.read.attach(0));
+    this.pressure.read.attach(0);
     gl.uniform1f(this.progCopy.u.uValue, 0.8);
     this.glCtx.blit(this.pressure.write);
     this.pressure.swap();
 
     this.progPressure.bind();
-    gl.uniform1i(this.progPressure.u.uDivergence, this.divergence.attach(1));
+    this.divergence.attach(1);
     gl.uniform2f(this.progPressure.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     for (let i = 0; i < this.PRESSURE_ITER; i++) {
-      gl.uniform1i(this.progPressure.u.uPressure, this.pressure.read.attach(0));
+      this.pressure.read.attach(0);
       this.glCtx.blit(this.pressure.write);
       this.pressure.swap();
     }
 
     // 5. Gradient Subtraction
     this.progGradSub.bind();
-    gl.uniform1i(this.progGradSub.u.uPressure, this.pressure.read.attach(0));
-    gl.uniform1i(this.progGradSub.u.uVelocity, this.velocity.read.attach(1));
+    this.pressure.read.attach(0);
+    this.velocity.read.attach(1);
     gl.uniform2f(this.progGradSub.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     this.glCtx.blit(this.velocity.write);
     this.velocity.swap();
@@ -212,8 +286,8 @@ export class FluidSimulation {
     // 6. Water Evaporation & Diffusion
     const dryTau = fixing ? 0.25 : 2 + (1 - this.P.DRY) * 16;
     this.progAdvWet.bind();
-    gl.uniform1i(this.progAdvWet.u.uVelocity, this.velocity.read.attach(0));
-    gl.uniform1i(this.progAdvWet.u.uWet, this.wet.read.attach(1));
+    this.velocity.read.attach(0);
+    this.wet.read.attach(1);
     gl.uniform2f(this.progAdvWet.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     gl.uniform2f(this.progAdvWet.u.uSrcTexel, this.wet.texel[0], this.wet.texel[1]);
     gl.uniform1f(this.progAdvWet.u.uDt, dt);
@@ -225,9 +299,9 @@ export class FluidSimulation {
     // 7. Pigment Advection & Chromatic Bleed
     const C = this.P.COLOR;
     this.progAdvInk.bind();
-    gl.uniform1i(this.progAdvInk.u.uVelocity, this.velocity.read.attach(0));
-    gl.uniform1i(this.progAdvInk.u.uSource, this.ink.read.attach(1));
-    gl.uniform1i(this.progAdvInk.u.uWet, this.wet.read.attach(2));
+    this.velocity.read.attach(0);
+    this.ink.read.attach(1);
+    this.wet.read.attach(2);
     gl.uniform2f(this.progAdvInk.u.uTexel, this.velocity.texel[0], this.velocity.texel[1]);
     gl.uniform2f(this.progAdvInk.u.uSrcTexel, this.ink.texel[0], this.ink.texel[1]);
     gl.uniform1f(this.progAdvInk.u.uDt, dt);
@@ -241,9 +315,9 @@ export class FluidSimulation {
     // 8. Layer Exchange (settle down mobile pigment into paper while fixing)
     const settle = fixing ? 1 - Math.exp(-dt * 5) : 0;
     this.progExch.bind();
-    gl.uniform1i(this.progExch.u.uFixed, this.fixed.read.attach(0));
-    gl.uniform1i(this.progExch.u.uInk, this.ink.read.attach(1));
-    gl.uniform1i(this.progExch.u.uWet, this.wet.read.attach(2));
+    this.fixed.read.attach(0);
+    this.ink.read.attach(1);
+    this.wet.read.attach(2);
     gl.uniform1f(this.progExch.u.uSettle, settle);
     gl.uniform1f(this.progExch.u.uDt, dt);
     gl.uniform1f(this.progExch.u.uAspect, this.glCtx.canvas.width / this.glCtx.canvas.height);
@@ -254,16 +328,18 @@ export class FluidSimulation {
     this.glCtx.blit(this.ink.write);
     this.fixed.swap();
     this.ink.swap();
+
+    return true;
   }
 
   render() {
     const gl = this.gl;
     this.progDisplay.bind();
-    gl.uniform1i(this.progDisplay.u.uInk, this.ink.read.attach(0));
-    gl.uniform1i(this.progDisplay.u.uWet, this.wet.read.attach(1));
-    gl.uniform1i(this.progDisplay.u.uFixed, this.fixed.read.attach(2));
+    this.ink.read.attach(0);
+    this.wet.read.attach(1);
+    this.fixed.read.attach(2);
+    this.paperTex.attach(3);
     gl.uniform2f(this.progDisplay.u.uTexel, this.ink.texel[0], this.ink.texel[1]);
-    gl.uniform2f(this.progDisplay.u.uRes, this.glCtx.canvas.width, this.glCtx.canvas.height);
     gl.uniform1f(this.progDisplay.u.uInkStrength, 1.9);
     gl.uniform1f(this.progDisplay.u.uEdge, 1.35);
     gl.uniform1f(this.progDisplay.u.uGrain, 0.55);

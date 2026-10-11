@@ -56,6 +56,7 @@ export class InkwasherApp {
 
     this.stylusSeen = false;
     this.strokeCount = 0;
+    this.needsRender = true;
 
     // 8. Setup Event Listeners
     this.initPointerEvents();
@@ -330,6 +331,7 @@ export class InkwasherApp {
     this.viewport.setCanvasSize(width, height);
     this.sim.reinitTargets(width, height);
     this.history.reset();
+    this.sim.wake(60);
     this.renderSingle();
   }
 
@@ -351,15 +353,24 @@ export class InkwasherApp {
     const dt = Math.min((now - this.lastTime) / 1000, 1 / 30) || 1 / 60;
     this.lastTime = now;
 
-    // Simulation advection & drying
-    this.sim.step(dt);
-    this.sim.render();
-    this.updateCursor();
+    const isDrawing = this.pointerState.down;
+    if (isDrawing) {
+      this.sim.wake(120);
+    }
 
+    // Adaptive Sleep: step fluid physics; only render if active, drawing, or refresh requested
+    const simulated = this.sim.step(dt);
+    if (simulated || isDrawing || this.needsRender) {
+      this.sim.render();
+      this.needsRender = false;
+    }
+
+    this.updateCursor();
     this.rafId = requestAnimationFrame(this.loop.bind(this));
   }
 
   renderSingle() {
+    this.needsRender = true;
     this.sim.render();
   }
 }

@@ -5,7 +5,9 @@ export class HistoryManager {
     this.glCtx = glCtx;
     this.sim = sim;
     this.gl = glCtx.gl;
-    this.maxHistory = maxHistory;
+    const isMobile = matchMedia('(pointer: coarse)').matches || (navigator.maxTouchPoints && navigator.maxTouchPoints > 1);
+    const isHighRes = sim.dyeRes && (sim.dyeRes.w >= 2000 || sim.dyeRes.h >= 2000);
+    this.maxHistory = isHighRes ? 5 : (isMobile ? 6 : maxHistory);
 
     this.undoStack = [];
     this.redoStack = [];

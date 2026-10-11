@@ -210,13 +210,11 @@ void main(){
   }
 }`;
 
-export const displayFS = `#version 300 es
+export const paperBakeFS = `#version 300 es
 precision highp float;
 in vec2 vUv;
 out vec4 o;
-uniform sampler2D uInk, uFixed, uWet;
-uniform vec2 uTexel, uRes;
-uniform float uInkStrength, uEdge, uGrain, uWhiteTint;
+uniform vec2 uRes;
 
 float hash(vec2 p){
   p = fract(p * vec2(123.34, 456.21));
@@ -244,6 +242,22 @@ float fbm(vec2 p){
   return v;
 }
 
+void main(){
+  vec2 px = vUv * uRes;
+  float fiber = fbm(px * 0.055);
+  float tooth = vnoise(px * 0.42);
+  float grain = fbm(px * 0.12 + 31.7);
+  o = vec4(fiber, tooth, grain, 1.0);
+}`;
+
+export const displayFS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uInk, uFixed, uWet, uPaperTex;
+uniform vec2 uTexel;
+uniform float uInkStrength, uEdge, uGrain, uWhiteTint;
+
 vec4 pig(vec2 uv){
   return texture(uInk, uv) + texture(uFixed, uv);
 }
@@ -257,10 +271,12 @@ void main(){
   float b = dot(pig(vUv - vec2(0.0, uTexel.y)).rgb, vec3(1.0));
   float t = dot(pig(vUv + vec2(0.0, uTexel.y)).rgb, vec3(1.0));
   float edge = length(vec2(r - l, t - b));
-  vec2 px = vUv * uRes;
-  float fiber = fbm(px * 0.055);
-  float tooth = vnoise(px * 0.42);
-  float grain = fbm(px * 0.12 + 31.7);
+
+  vec3 paperNoise = texture(uPaperTex, vUv).rgb;
+  float fiber = paperNoise.r;
+  float tooth = paperNoise.g;
+  float grain = paperNoise.b;
+
   vec3 paper = vec3(0.962, 0.954, 0.930);
   paper -= (fiber - 0.5) * 0.05;
   paper -= (tooth - 0.5) * 0.022;
