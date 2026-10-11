@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" rx="108" fill="#f1efe8"/>
+  <circle cx="256" cy="256" r="210" fill="#e8e5dc" stroke="#d5d0c2" stroke-width="4"/>
+  <!-- Ink droplet / wash spread -->
+  <path d="M256,90 C256,90 150,225 150,310 C150,370 198,418 256,418 C314,418 362,370 362,310 C362,225 256,90 256,90 Z" fill="#181822" opacity="0.9"/>
+  <!-- Fluid ripple overlay -->
+  <circle cx="256" cy="320" r="60" fill="none" stroke="#3b4b68" stroke-width="6" opacity="0.45"/>
+  <circle cx="256" cy="320" r="95" fill="none" stroke="#3b4b68" stroke-width="3" stroke-dasharray="8 6" opacity="0.3"/>
+  <circle cx="256" cy="320" r="130" fill="none" stroke="#3b4b68" stroke-width="2" stroke-dasharray="4 8" opacity="0.2"/>
+  <circle cx="280" cy="285" r="14" fill="#ffffff" opacity="0.75"/>
+</svg>

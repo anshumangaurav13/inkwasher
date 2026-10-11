@@ -1,0 +1,7 @@
+# Reference repository
+_reference/
+
+# Temp files
+*.log
+.DS_Store
+Thumbs.db

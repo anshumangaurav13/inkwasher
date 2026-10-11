@@ -1,25 +1,17 @@
 {
-  "name": "inkwash",
-  "short_name": "inkwash",
-  "description": "A minimal ink and water drawing app.",
-  "id": "./",
+  "name": "Inkwasher - Fluid Watercolor Studio",
+  "short_name": "Inkwasher",
+  "description": "Pen-and-ink with living water — GPU fluid simulation watercolor drawing app",
   "start_url": "./index.html",
-  "scope": "./",
-  "display": "standalone",
-  "background_color": "#f1efe8",
-  "theme_color": "#f1efe8",
+  "display": "fullscreen",
   "orientation": "any",
+  "background_color": "#e5e2d8",
+  "theme_color": "#e5e2d8",
   "icons": [
     {
-      "src": "./icon-192.png",
-      "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any maskable"
-    },
-    {
-      "src": "./icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
       "purpose": "any maskable"
     }
   ]
