@@ -1,10 +1,21 @@
-const CACHE_NAME = 'inkwash-v1';
+// sw.js - Service Worker for Inkwasher Offline Drawing & PWA Cache
+const CACHE_NAME = 'inkwasher-v1';
 const APP_SHELL = [
   './',
   './index.html',
+  './css/style.css',
   './manifest.webmanifest',
+  './icon.svg',
   './icon-192.png',
-  './icon-512.png'
+  './icon-512.png',
+  './js/app.js',
+  './js/gl-core.js',
+  './js/shaders.js',
+  './js/fluid-sim.js',
+  './js/brushes.js',
+  './js/viewport.js',
+  './js/history.js',
+  './js/ui.js'
 ];
 
 self.addEventListener('install', event => {
