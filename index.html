@@ -313,6 +313,15 @@
     </div>
   </div>
 
+  <!-- Service Worker Registration for PWA / Offline Tablet -->
+  <script>
+    if ('serviceWorker' in navigator && location.protocol !== 'file:') {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+
   <!-- Main Application Script -->
   <script type="module" src="./js/app.js"></script>
 </body>
