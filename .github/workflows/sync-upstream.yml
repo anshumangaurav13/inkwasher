@@ -1,0 +1,40 @@
+name: Sync Upstream to _reference
+
+on:
+  workflow_dispatch: # Allows manual one-click sync directly from GitHub web UI
+  schedule:
+    - cron: '0 6 * * 1' # Automatic weekly check every Monday
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Add and fetch upstream
+        run: |
+          git remote add upstream https://github.com/johnowhitaker/inkwash.git || true
+          git fetch upstream main
+
+      - name: Extract upstream into _reference
+        run: |
+          mkdir -p _reference
+          git archive upstream/main | tar -x -C _reference/
+
+      - name: Commit and push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add _reference/
+          if git diff --staged --quiet; then
+            echo "No changes from upstream."
+          else
+            git commit -m "chore(sync): update _reference from johnowhitaker/inkwash main"
+            git push origin main
+          fi

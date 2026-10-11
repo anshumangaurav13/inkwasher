@@ -1,0 +1,18 @@
+{
+  "name": "inkwasher",
+  "version": "1.0.0",
+  "description": "Fluid watercolor drawing app with GPU simulation, custom brushes, and pan/zoom/rotate canvas",
+  "scripts": {
+    "start": "node server.js",
+    "sync": "node scripts/sync-upstream.js"
+  },
+  "keywords": [
+    "watercolor",
+    "drawing",
+    "webgl2",
+    "fluid-simulation",
+    "stylus"
+  ],
+  "author": "Anshuman Gaurav",
+  "license": "MIT"
+}
