@@ -108,20 +108,22 @@ export class InkwasherApp {
         return;
       }
 
-      // Handle multi-touch (two-finger pan/zoom/rotate)
+      // Handle touch input (Fingers are strictly for viewport navigation: pan/zoom/rotate)
       if (e.pointerType === 'touch') {
+        e.preventDefault();
         this.viewport.addTouchPointer(e.pointerId, e.clientX, e.clientY);
-        if (this.viewport.touchPointers.size >= 2) {
-          // If a drawing stroke was active, cancel it in favor of two-finger gesture
-          if (this.pointerState.down) {
-            this.pointerState.down = false;
-            this.pointerState.pointerId = null;
-          }
-          return;
-        }
+        return; // NEVER draw with fingers! No water, no ink, nothing!
       }
 
-      // Ignore extra touches if already drawing with stylus or active pointer
+      // Check for Spring-Loaded navigation mode (Space = Pan, Ctrl+Space = Zoom, R = Rotate)
+      const springMode = this.viewport.getActiveSpringMode();
+      if (springMode) {
+        e.preventDefault();
+        this.viewport.startNavDrag(e.clientX, e.clientY, springMode);
+        return;
+      }
+
+      // Stylus or Mouse drawing: ignore extra pointers if already drawing with active pointer
       if (this.pointerState.down && e.pointerId !== this.pointerState.pointerId) {
         return;
       }
@@ -173,17 +175,20 @@ export class InkwasherApp {
 
     // Pointer Move (with coalesced events for zero-latency stylus dispatch)
     windowTarget.addEventListener('pointermove', (e) => {
-      // Spring-loaded navigation drag
+      // Handle touch input (Fingers are strictly for viewport navigation: pan/zoom/rotate)
+      if (e.pointerType === 'touch') {
+        if (this.viewport.touchPointers.has(e.pointerId)) {
+          e.preventDefault();
+          this.viewport.updateTouchPointer(e.pointerId, e.clientX, e.clientY);
+        }
+        return; // NEVER draw with fingers!
+      }
+
+      // Spring-loaded navigation drag (Space / Ctrl / R with stylus or mouse)
       if (this.viewport.isNavDragging) {
         e.preventDefault();
         this.viewport.updateNavDrag(e.clientX, e.clientY);
         return;
-      }
-
-      // Multi-touch gestures
-      if (e.pointerType === 'touch' && this.viewport.touchPointers.has(e.pointerId)) {
-        this.viewport.updateTouchPointer(e.pointerId, e.clientX, e.clientY);
-        if (this.viewport.touchPointers.size >= 2) return;
       }
 
       if (this.pointerState.down && e.pointerId !== this.pointerState.pointerId) return;
@@ -223,10 +228,6 @@ export class InkwasherApp {
 
     // Pointer Up & Cancel
     const endPointer = (e) => {
-      if (this.viewport.isNavDragging) {
-        this.viewport.endNavDrag();
-      }
-
       if (e && e.pointerType === 'touch') {
         const { wasTwoFingerTap } = this.viewport.removeTouchPointer(e.pointerId);
         if (wasTwoFingerTap) {
@@ -235,6 +236,11 @@ export class InkwasherApp {
             this.ui.showToast('Two-finger Tap: Undo');
           }
         }
+        return;
+      }
+
+      if (this.viewport.isNavDragging) {
+        this.viewport.endNavDrag();
       }
 
       if (e && e.pointerId !== undefined && e.pointerId !== this.pointerState.pointerId) return;
@@ -278,7 +284,6 @@ export class InkwasherApp {
 
     if (!ptr.down) return;
 
-    const isTouchWater = (ptr.pointerType === 'touch' && this.stylusSeen);
     this.brushes.applyStroke({
       px, py,
       bx: ptr.bx,
@@ -287,7 +292,7 @@ export class InkwasherApp {
       pressure: this.pressureNow(),
       speed: ptr.speed,
       pointerType: ptr.pointerType
-    }, dt, ptr.barrel, isTouchWater);
+    }, dt, ptr.barrel);
   }
 
   initWindowEvents() {
@@ -299,7 +304,7 @@ export class InkwasherApp {
 
   updateCursor() {
     const ptr = this.pointerState;
-    if (ptr.pointerType === 'touch' || this.viewport.getActiveSpringMode()) {
+    if (ptr.pointerType === 'touch' || this.viewport.getActiveSpringMode() || this.viewport.touchGestureActive) {
       this.cursorEl.style.opacity = '0';
       return;
     }
@@ -310,7 +315,6 @@ export class InkwasherApp {
 
     this.cursorEl.style.opacity = '1';
     const isWater = (this.brushes.activeType === BRUSH_TYPES.WATER) ||
-                    (ptr.pointerType === 'touch' && this.stylusSeen) ||
                     (ptr.barrel && this.brushes.activeType === BRUSH_TYPES.PEN);
 
     const pr = ptr.down ? this.pressureNow() : 0.3;

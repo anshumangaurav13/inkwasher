@@ -1,5 +1,5 @@
 // sw.js - Service Worker for Inkwasher Offline Drawing & PWA Cache
-const CACHE_NAME = 'inkwasher-v1';
+const CACHE_NAME = 'inkwasher-v2';
 const APP_SHELL = [
   './',
   './index.html',

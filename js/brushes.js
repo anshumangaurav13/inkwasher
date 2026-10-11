@@ -166,7 +166,7 @@ export class BrushEngine {
   }
 
   // Applies active stroke step
-  applyStroke(strokeInfo, dt, isBarrelDown = false, isTouchWater = false) {
+  applyStroke(strokeInfo, dt, isBarrelDown = false) {
     this.sim.brushFootprint.r = 0;
 
     let effectiveType = this.activeType;
@@ -174,8 +174,6 @@ export class BrushEngine {
       // Barrel button temporarily toggles between pen/wash and water
       effectiveType = (effectiveType === BRUSH_TYPES.PEN || effectiveType === BRUSH_TYPES.GOUACHE)
         ? BRUSH_TYPES.WATER : BRUSH_TYPES.PEN;
-    } else if (isTouchWater) {
-      effectiveType = BRUSH_TYPES.WATER;
     }
 
     const { px, py, bx, by, dx, dy, dist, pressure: pr, speed } = strokeInfo;

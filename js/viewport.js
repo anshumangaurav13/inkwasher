@@ -29,10 +29,10 @@ export class ViewportController {
     // Multi-touch 2-finger gesture state
     this.touchPointers = new Map();
     this.touchGestureActive = false;
-    this.touchStartDist = 0;
-    this.touchStartAngle = 0;
-    this.touchStartMid = { x: 0, y: 0 };
-    this.touchInitialTransform = { panX: 0, panY: 0, scale: 1, rotation: 0 };
+    this.prevMid = { x: 0, y: 0 };
+    this.prevDist = 0;
+    this.prevAngle = 0;
+    this.touchStartTime = 0;
     this.touchMaxTravel = 0;
 
     // Callbacks
@@ -193,20 +193,22 @@ export class ViewportController {
   // ---------------- Multi-Touch (2-Finger Gestures) ----------------
   addTouchPointer(id, clientX, clientY) {
     this.touchPointers.set(id, { x: clientX, y: clientY, startX: clientX, startY: clientY });
-    if (this.touchPointers.size === 2) {
+    if (this.touchPointers.size >= 2) {
       const pts = Array.from(this.touchPointers.values());
       const p1 = pts[0], p2 = pts[1];
-      this.touchGestureActive = true;
-      this.touchStartDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      this.touchStartAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      this.touchStartMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-      this.touchInitialTransform = {
-        panX: this.panX,
-        panY: this.panY,
-        scale: this.scale,
-        rotation: this.rotation
-      };
-      this.touchMaxTravel = 0;
+      const mid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      const dist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+      this.prevMid = mid;
+      this.prevDist = dist;
+      this.prevAngle = angle;
+
+      if (!this.touchGestureActive) {
+        this.touchGestureActive = true;
+        this.touchStartTime = performance.now();
+        this.touchMaxTravel = 0;
+      }
     }
   }
 
@@ -214,32 +216,58 @@ export class ViewportController {
     if (!this.touchPointers.has(id)) return;
     const pt = this.touchPointers.get(id);
     const travel = Math.hypot(clientX - pt.startX, clientY - pt.startY);
-    this.touchMaxTravel = Math.max(this.touchMaxTravel, travel);
+    this.touchMaxTravel = Math.max(this.touchMaxTravel || 0, travel);
     pt.x = clientX;
     pt.y = clientY;
 
-    if (this.touchPointers.size === 2 && this.touchGestureActive) {
+    if (this.touchPointers.size >= 2 && this.touchGestureActive) {
       const pts = Array.from(this.touchPointers.values());
       const p1 = pts[0], p2 = pts[1];
 
-      // Pan midpoint
       const currentMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
-      const panDx = currentMid.x - this.touchStartMid.x;
-      const panDy = currentMid.y - this.touchStartMid.y;
-      this.panX = this.touchInitialTransform.panX + panDx;
-      this.panY = this.touchInitialTransform.panY + panDy;
-
-      // Pinch zoom
       const currentDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-      if (this.touchStartDist > 10) {
-        const pinchScale = currentDist / this.touchStartDist;
-        this.scale = Math.max(0.08, Math.min(this.touchInitialTransform.scale * pinchScale, 8.0));
+      const currentAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+
+      // Delta pan
+      const dMidX = currentMid.x - this.prevMid.x;
+      const dMidY = currentMid.y - this.prevMid.y;
+
+      // Delta zoom
+      let scaleFactor = 1.0;
+      if (this.prevDist > 10 && currentDist > 10) {
+        scaleFactor = currentDist / this.prevDist;
+        scaleFactor = Math.max(0.6, Math.min(scaleFactor, 1.6));
       }
 
-      // Two-finger rotate
-      const currentAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-      const angleDiff = currentAngle - this.touchStartAngle;
-      this.rotation = this.touchInitialTransform.rotation + angleDiff;
+      // Delta rotation
+      let dAngle = currentAngle - this.prevAngle;
+      while (dAngle > Math.PI) dAngle -= 2 * Math.PI;
+      while (dAngle < -Math.PI) dAngle += 2 * Math.PI;
+
+      // Transform around midpoint between fingers
+      const centerScreenX = window.innerWidth / 2 + this.panX;
+      const centerScreenY = window.innerHeight / 2 + this.panY;
+
+      // Vector from previous midpoint to canvas center
+      const rx = centerScreenX - this.prevMid.x;
+      const ry = centerScreenY - this.prevMid.y;
+
+      const cos = Math.cos(dAngle);
+      const sin = Math.sin(dAngle);
+      const newRx = (rx * cos - ry * sin) * scaleFactor;
+      const newRy = (rx * sin + ry * cos) * scaleFactor;
+
+      const newCenterScreenX = this.prevMid.x + dMidX + newRx;
+      const newCenterScreenY = this.prevMid.y + dMidY + newRy;
+
+      this.panX = newCenterScreenX - window.innerWidth / 2;
+      this.panY = newCenterScreenY - window.innerHeight / 2;
+      this.scale = Math.max(0.08, Math.min(this.scale * scaleFactor, 8.0));
+      this.rotation += dAngle;
+
+      this.prevMid = currentMid;
+      this.prevDist = currentDist;
+      this.prevAngle = currentAngle;
 
       this.applyTransform();
     }
@@ -249,11 +277,19 @@ export class ViewportController {
     this.touchPointers.delete(id);
     if (this.touchPointers.size < 2) {
       const wasActive = this.touchGestureActive;
-      const travel = this.touchMaxTravel;
+      const travel = this.touchMaxTravel || 0;
+      const duration = performance.now() - (this.touchStartTime || 0);
       this.touchGestureActive = false;
-      return { wasTwoFingerTap: wasActive && travel < 12 };
+      return { wasTwoFingerTap: wasActive && travel < 15 && duration < 400 };
+    } else {
+      // Re-anchor to the remaining 2 touches
+      const pts = Array.from(this.touchPointers.values());
+      const p1 = pts[0], p2 = pts[1];
+      this.prevMid = { x: (p1.x + p2.x) / 2, y: (p1.y + p2.y) / 2 };
+      this.prevDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+      this.prevAngle = Math.atan2(p2.y - p1.y, p2.x - p1.x);
+      return { wasTwoFingerTap: false };
     }
-    return { wasTwoFingerTap: false };
   }
 
   initKeyboardListeners() {
