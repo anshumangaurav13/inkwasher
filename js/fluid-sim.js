@@ -1,7 +1,7 @@
 // js/fluid-sim.js - Navier-Stokes Fluid & Pigment Simulation Engine
 
 import {
-  copyFS, splatFS, advectVelFS, advectWetFS, advectInkFS,
+  copyFS, splatFS, pencilSplatFS, advectVelFS, advectWetFS, advectInkFS,
   divergenceFS, pressureFS, gradSubFS, curlFS, vorticityFS,
   exchangeFS, displayFS, paperBakeFS
 } from './shaders.js';
@@ -57,6 +57,7 @@ export class FluidSimulation {
     this.progVort = this.glCtx.createProgram(vorticityFS);
     this.progDisplay = this.glCtx.createProgram(displayFS);
     this.progPaperBake = this.glCtx.createProgram(paperBakeFS);
+    this.progPencilSplat = this.glCtx.createProgram(pencilSplatFS);
 
     // Static sampler bindings assigned once to eliminate per-frame driver overhead
     this.progCopy.bind();
@@ -103,6 +104,9 @@ export class FluidSimulation {
     gl.uniform1i(this.progDisplay.u.uWet, 1);
     gl.uniform1i(this.progDisplay.u.uFixed, 2);
     gl.uniform1i(this.progDisplay.u.uPaperTex, 3);
+
+    this.progPencilSplat.bind();
+    gl.uniform1i(this.progPencilSplat.u.uPaperTex, 0);
   }
 
   bakePaperTexture() {
@@ -210,6 +214,37 @@ export class FluidSimulation {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
     gl.blendEquation(gl.FUNC_ADD);
+    gl.disable(gl.BLEND);
+    gl.disable(gl.SCISSOR_TEST);
+  }
+
+  splatPencil(target, x, y, r, c, pressure = 0.5) {
+    this.wake(140);
+    const gl = this.gl;
+    const f = target.read;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, f.fbo);
+    gl.viewport(0, 0, f.w, f.h);
+
+    const ex = Math.ceil(r * 4.5 * f.h) + 2;
+    const cx = Math.round(x * f.w);
+    const cy = Math.round(y * f.h);
+
+    gl.enable(gl.SCISSOR_TEST);
+    gl.scissor(Math.max(cx - ex, 0), Math.max(cy - ex, 0), ex * 2, ex * 2);
+    gl.enable(gl.BLEND);
+    gl.blendEquation(gl.FUNC_ADD);
+    gl.blendFunc(gl.ONE, gl.ONE);
+
+    this.progPencilSplat.bind();
+    this.paperTex.attach(0);
+    gl.uniform1i(this.progPencilSplat.u.uPaperTex, 0);
+    gl.uniform1f(this.progPencilSplat.u.uAspect, this.glCtx.canvas.width / this.glCtx.canvas.height);
+    gl.uniform2f(this.progPencilSplat.u.uPoint, x, y);
+    gl.uniform4f(this.progPencilSplat.u.uColor, c[0], c[1], c[2], c[3]);
+    gl.uniform1f(this.progPencilSplat.u.uRadius, r * r);
+    gl.uniform1f(this.progPencilSplat.u.uPressure, pressure);
+    gl.drawArrays(gl.TRIANGLES, 0, 3);
+
     gl.disable(gl.BLEND);
     gl.disable(gl.SCISSOR_TEST);
   }

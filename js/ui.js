@@ -362,6 +362,10 @@ export class UIController {
         case '5': this.selectBrush(BRUSH_TYPES.GOUACHE); break;
         case '6': this.selectBrush(BRUSH_TYPES.SPLATTER); break;
         case '7': this.selectBrush(BRUSH_TYPES.BLENDER); break;
+        case '8':
+        case 'p':
+          this.selectBrush(BRUSH_TYPES.PENCIL);
+          break;
         case 'b':
           this.selectBrush(this.brushes.activeType === BRUSH_TYPES.PEN ? BRUSH_TYPES.WATER : BRUSH_TYPES.PEN);
           break;

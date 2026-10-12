@@ -308,12 +308,17 @@ export class InkwasherApp {
 
     this.cursorEl.style.opacity = '1';
     const isWater = (this.brushes.activeType === BRUSH_TYPES.WATER) ||
-                    (ptr.barrel && this.brushes.activeType === BRUSH_TYPES.PEN);
+                    (ptr.barrel && (this.brushes.activeType === BRUSH_TYPES.PEN || this.brushes.activeType === BRUSH_TYPES.PENCIL));
 
     const pr = ptr.down ? this.pressureNow() : 0.3;
-    const radius = isWater
-      ? this.brushes.getBrushRadius(pr, ptr.down ? ptr.speed : 0)
-      : this.brushes.getPenRadius(pr, 0);
+    let radius;
+    if (isWater || this.brushes.activeType === BRUSH_TYPES.WASH || this.brushes.activeType === BRUSH_TYPES.BLEED || this.brushes.activeType === BRUSH_TYPES.BLENDER || this.brushes.activeType === BRUSH_TYPES.SPLATTER) {
+      radius = this.brushes.getBrushRadius(pr, ptr.down ? ptr.speed : 0);
+    } else if (this.brushes.activeType === BRUSH_TYPES.PENCIL) {
+      radius = this.brushes.getPencilRadius(pr, ptr.down ? ptr.speed : 0);
+    } else {
+      radius = this.brushes.getPenRadius(pr, 0);
+    }
 
     // Scale cursor preview with viewport zoom scale!
     const canvasH = this.viewport.canvasHeight;

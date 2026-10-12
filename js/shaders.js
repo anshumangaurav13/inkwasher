@@ -33,6 +33,42 @@ void main(){
   o = uColor * exp(-dot(p, p) / uRadius);
 }`;
 
+export const pencilSplatFS = `#version 300 es
+precision highp float;
+in vec2 vUv;
+out vec4 o;
+uniform sampler2D uPaperTex;
+uniform float uAspect;
+uniform vec2 uPoint;
+uniform vec4 uColor;
+uniform float uRadius;
+uniform float uPressure;
+
+void main(){
+  vec2 p = vUv - uPoint;
+  p.x *= uAspect;
+  float d2 = dot(p, p);
+  if (d2 > uRadius * 4.0) discard;
+
+  float falloff = exp(-d2 / uRadius);
+  
+  // Sample paper tooth and fibers from pre-baked paper texture
+  vec3 paperNoise = texture(uPaperTex, vUv).rgb;
+  float tooth = paperNoise.g;
+  float fiber = paperNoise.r;
+  float grain = paperNoise.b;
+  float combinedTooth = tooth * 0.65 + fiber * 0.25 + grain * 0.10;
+
+  // Pressure modulates paper tooth penetration
+  // Light touch: catches only highest peaks (> 0.58)
+  // Hard touch: crushes into valleys (> 0.20)
+  float threshold = mix(0.58, 0.20, clamp(uPressure, 0.0, 1.0));
+  float toothMask = smoothstep(threshold - 0.12, threshold + 0.22, combinedTooth);
+
+  float density = falloff * toothMask * (0.4 + 0.6 * uPressure);
+  o = uColor * density;
+}`;
+
 export const advectVelFS = `#version 300 es
 precision highp float;
 in vec2 vUv;

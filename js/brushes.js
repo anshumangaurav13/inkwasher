@@ -7,7 +7,8 @@ export const BRUSH_TYPES = {
   BLEED: 'bleed',
   GOUACHE: 'gouache',
   SPLATTER: 'splatter',
-  BLENDER: 'blender'
+  BLENDER: 'blender',
+  PENCIL: 'pencil'
 };
 
 export const BRUSH_METADATA = {
@@ -101,6 +102,19 @@ export const BRUSH_METADATA = {
     defaultBleed: 0.7,
     defaultBink: 0.0,
     white: false
+  },
+  [BRUSH_TYPES.PENCIL]: {
+    id: BRUSH_TYPES.PENCIL,
+    name: 'Aquarelle Pencil',
+    shortName: 'Pencil',
+    desc: 'Dry graphite catching paper tooth; blooms into living wash when wet.',
+    icon: 'pencil',
+    svgIcon: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/><path d="M15 5l4 4"/></svg>',
+    defaultSize: 0.35,
+    defaultFlow: 0.5,
+    defaultBleed: 0.5,
+    defaultBink: 0.0,
+    white: false
   }
 };
 
@@ -121,7 +135,7 @@ export class BrushEngine {
     const meta = BRUSH_METADATA[type];
     if (meta.white) {
       this.isWhiteMode = true;
-    } else if (type !== BRUSH_TYPES.PEN && type !== BRUSH_TYPES.WASH && this.activeType !== BRUSH_TYPES.GOUACHE) {
+    } else if (type !== BRUSH_TYPES.PEN && type !== BRUSH_TYPES.WASH && type !== BRUSH_TYPES.PENCIL && this.activeType !== BRUSH_TYPES.GOUACHE) {
       // Keep previous white mode if not switching to gouache
     }
   }
@@ -165,14 +179,19 @@ export class BrushEngine {
     return (0.014 + 0.060 * pr) * (1 + Math.min(speed, 2.5) * 0.28) * mult;
   }
 
+  getPencilRadius(pr, speed) {
+    const mult = this.getSizeMultiplier();
+    return (0.0012 + 0.0032 * pr) * Math.min(Math.max(1.10 - speed * 0.25, 0.6), 1.10) * mult;
+  }
+
   // Applies active stroke step
   applyStroke(strokeInfo, dt, isBarrelDown = false) {
     this.sim.brushFootprint.r = 0;
 
     let effectiveType = this.activeType;
     if (isBarrelDown) {
-      // Barrel button temporarily toggles between pen/wash and water
-      effectiveType = (effectiveType === BRUSH_TYPES.PEN || effectiveType === BRUSH_TYPES.GOUACHE)
+      // Barrel button temporarily toggles between pen/wash/pencil and water
+      effectiveType = (effectiveType === BRUSH_TYPES.PEN || effectiveType === BRUSH_TYPES.GOUACHE || effectiveType === BRUSH_TYPES.PENCIL)
         ? BRUSH_TYPES.WATER : BRUSH_TYPES.PEN;
     }
 
@@ -202,6 +221,28 @@ export class BrushEngine {
           if (i % 2 === 0 || steps === 1) {
             this.sim.splat(this.sim.wet, x, y, radius * 2.8, [0.16, 0, 0, 0], true);
           }
+        }
+        break;
+      }
+
+      case BRUSH_TYPES.PENCIL: {
+        const radius = this.getPencilRadius(pr, speed);
+        const dens = (0.45 + 0.95 * pr);
+        const col = this.getColorVector(dens);
+
+        // Pencil does NOT pool ink when resting; prevent blob accumulation
+        if (dist < radius * 0.3) {
+          return;
+        }
+
+        // Tighter spacing so stipple grain connects smoothly without dot gaps
+        const spacing = radius * 0.4;
+        const steps = Math.min(Math.ceil(dist / spacing), 60);
+        for (let i = 1; i <= steps; i++) {
+          const t = i / steps;
+          const x = px + dx * t;
+          const y = py + dy * t;
+          this.sim.splatPencil(this.sim.ink, x, y, radius, col, pr);
         }
         break;
       }

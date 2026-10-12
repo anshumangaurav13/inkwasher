@@ -17,7 +17,7 @@
 - **Fluid watercolor physics** — ink flows, bleeds, and blooms naturally on wet paper.
 - **Zero-latency stylus** — hardware unbuffered pipeline with pressure sensitivity and barrel toggles.
 - **Fixed canvas (1600×1600)** — smooth 2-finger pan, pinch zoom, and rotate with palm rejection.
-- **7 Brushes** — Dip Pen, Clear Water, Sumi Wash, Bleed, White Gouache, Splatter, Blender.
+- **8 Brushes** — Dip Pen, Clear Water, Sumi Wash, Bleed, White Gouache, Splatter, Blender, Aquarelle Pencil.
 - **GPU Undo / Redo** — instant texture snapshots (2-finger tap to undo).
 - **Lossless export** — clean 1:1 full-resolution PNG download.
 - **Installable PWA** — runs offline on Android tablets (S-Pen) and iPads (Apple Pencil).
@@ -28,7 +28,7 @@
 
 | Action | Control |
 | :--- | :--- |
-| **Select Brush** | Keys `1` through `7` |
+| **Select Brush** | Keys `1` through `8` or `P` |
 | **Pan Canvas** | Hold `Space` + Drag or **2-Finger Drag** |
 | **Zoom Canvas** | Hold `Ctrl + Space` + Drag or **2-Finger Pinch** |
 | **Rotate Canvas** | Hold `R` + Drag or **2-Finger Twist** |
